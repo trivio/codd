@@ -120,6 +120,60 @@ def join(right, **conditions):
       ])
     return _join
 
+def when(**context):
+  """
+  Returns a decorator used to create a chain of pattern matched/gaurded
+  functions. Useful for overiding functions based on input types.
+  
+  Example:
+  >>> my_func = when()
+  >>> @my_func()
+  ... def default():
+  ...   return "default"
+  >>> @my_func("_ == 'bob'")
+  ... def welcome_bob(name):
+  ...   return "we hate you"
+  >>> @my_func("_ != 'bob'")
+  ... def welcome(name):
+  ...   return "nice to meet you"
+  
+  
+  """
+  
+  chain = []
+  
+  def invoke(*args):
+    for gaurd, func in chain:        
+      if gaurd(args):
+        return func(*args)
+    
+    raise ValueError("No match for %s" % str(args))
+    
+  def _when(*conditions):
+    conditions = [
+      compile(cond,'when', 'eval')
+      for cond in conditions
+    ]
+    def gaurd(args):
+      if len(args) != len(conditions):
+        return False
+        
+      for arg, cond in zip(args, conditions):
+        locals = context.copy()
+        locals['_'] = arg
+        if not eval(cond,None, locals):
+          return False
+      return True
+    
+    def collect(func):
+      chain.append((gaurd, func))
+      return func
+    
+    return collect
+      
+  _when.invoke = invoke
+  return _when
+
 def where(clause):
   boolean_op = parse(clause)
   
