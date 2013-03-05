@@ -161,7 +161,10 @@ def when(**context):
       for arg, cond in zip(args, conditions):
         locals = context.copy()
         locals['_'] = arg
-        if not eval(cond,None, locals):
+        try:
+          if not eval(cond,None, locals):
+            return False
+        except:
           return False
       return True
     
