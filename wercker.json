@@ -13,5 +13,4 @@
     "deploy/setup_pypi.sh",
     "python setup.py sdist upload | grep 'Server response (200): OK'"
   ]
-  
 }
