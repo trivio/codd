@@ -3,7 +3,7 @@
   "version": "2.7",
    
   "customSteps": [
-    "sudo nosetests -v $WERCKER_ROOT/tests"
+    "nosetests -v $WERCKER_ROOT"
   ],
   
   "deploy":[
