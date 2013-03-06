@@ -1,10 +1,8 @@
 {
   "lang": "python",
   "version": "2.7",
-  
-  "pip_install": false,
-    
-  "customSteps": [
+   
+  "unit_test": [
     "sudo nosetests -v $WERCKER_ROOT/tests"
   ],
   
