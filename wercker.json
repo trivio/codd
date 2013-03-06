@@ -2,7 +2,7 @@
   "lang": "python",
   "version": "2.7",
    
-  "unit_test": [
+  "unitTest": [
     "sudo nosetests -v $WERCKER_ROOT/tests"
   ],
   
