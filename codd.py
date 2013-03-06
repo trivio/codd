@@ -7,7 +7,6 @@ provides relational alegrbra for functional programs
 from collections import namedtuple
 import functools
 import itertools
-import boto
 import operator
 from datetime import datetime
 import string
