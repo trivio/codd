@@ -54,8 +54,29 @@ def bind(mval, mfunc):
     return mval
   else:
     return mfunc(value)
+
+def chain(*fns):
+  """
+  Return a composite function of all the funcions:
+  >>> def fn1(x):
+  ...  return x+1
+  
+  def fn2(x):
+  ...   return x*2
+  
+  >>> fn3 = chain(fn1,fn2)
+  >>> fn3(3)
+  8
+  """
+  def chain_(val):
+    for f in fns:
+      val = f(val)
+    return val
+    
+  return chain_  
   
 def pipe(val, *fns):
+
   m_val = success(val)
   for f in fns:
     try:
