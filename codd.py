@@ -87,6 +87,19 @@ def pipe(val, *fns):
   return m_val
 
 
+def cache(func, __marker__={}):
+  _cache_ = {}
+  def _(*args, **kw):
+    key = (args, sorted(kw.items()))
+    result = _cache_.get(key, __marker__)
+    if result is  __marker__:
+      _cache_[key] = result = func(*args, **kw)
+    return result
+
+  _.__name__ = "cached({0})".format(func.__name__)
+  return _
+
+
 def select(*columns):
 
   cols = [
@@ -216,7 +229,21 @@ def each(method):
   def _each(sec):
     return success(fmap(sec))
   return _each
+
+
+def parallel(*fns):
+  """
+  Given a list of functions return a function that takes a single argument.
+  The argument will be passed to each of the functions there return values
+  will be flattened
+  """
   
+  def _(val):
+    return chain.from_iterable( fn(val) for fn in fns)
+    
+  _.__name__ = "parallel({}) ".format((',').join([f.__name__ for f in fns]))
+  return _
+
 ## parsing routines #######
 
 COMPARISON_OPS = {
