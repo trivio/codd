@@ -239,7 +239,7 @@ def parallel(*fns):
   """
   
   def _(val):
-    return chain.from_iterable( fn(val) for fn in fns)
+    return itertools.chain.from_iterable( fn(val) for fn in fns)
     
   _.__name__ = "parallel({}) ".format((',').join([f.__name__ for f in fns]))
   return _

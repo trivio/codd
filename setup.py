@@ -13,7 +13,7 @@ except IOError:
 setup(
   name='codd',
   py_modules = ['codd'],
-  version='0.1.3',
+  version='0.1.4',
   description='relational alegrbra for functional programs',
   long_description=README,
   author='Scott Robertson',
