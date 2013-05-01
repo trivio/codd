@@ -40,7 +40,9 @@ def success(value):
   
 def failure(reason):
   return None, reason
-  
+ 
+
+
 def value(mval):
   return mval[0]
   
@@ -74,16 +76,29 @@ def chain(*fns):
     return val
     
   return chain_  
-  
+
+def flatten(sequences):
+  """
+  Turn a sequence of sequences into a single sequence
+  [[1,2,3], [4,5,6]] -> [1,2,3,4,5,6]
+  """
+  return success([
+    item
+    for sequence in sequences
+    for item in sequence
+  ])
+
+
 def pipe(val, *fns):
 
   m_val = success(val)
-  for f in fns:
+  for i,f in enumerate(fns):
     try:
       m_val = bind(m_val, f)
     except Exception, e:
+      raise
       # this should never happen
-      m_val = failure(e)
+      m_val = failure("{} errored at step {}:  {}".format(f.__name__, i, e))
   return m_val
 
 
@@ -210,8 +225,8 @@ def when(**context):
   _when.invoke = invoke
   return _when
 
-def where(clause):
-  boolean_op = parse(clause)
+def where(clause, *params):
+  boolean_op = parse(clause, params)
   
   def _where(seq):
     return success([
@@ -222,12 +237,22 @@ def where(clause):
     
   return _where
     
+def unit(func):
+  "Invoke a function returning (success, error)"
+
+  def _(value):
+    try:
+      return success(func(value))
+    except Exception, e:
+      return failure(e)
+  return _
     
 
 def each(method):
   fmap = functools.partial(map, method)
   def _each(sec):
     return success(fmap(sec))
+
   return _each
 
 
@@ -265,52 +290,52 @@ MULTIPLICATIVE_OPS ={
   '/'  : operator.div
 }
 
-def parse(statement):
-  return and_exp(list(Tokens(statement)))
+def parse(statement, params):
+  return and_exp(list(Tokens(statement)), params)
 
-def and_exp(tokens):
+def and_exp(tokens, params):
   def and_(a, b):
     def _and(row):
       return a(row) and b(row)
     return _and
     
-  lhs = or_exp(tokens) 
+  lhs = or_exp(tokens, params) 
   while len(tokens) and tokens[0] == 'and':
     tokens.pop(0)
-    lhs = and_(lhs, or_exp(tokens))
+    lhs = and_(lhs, or_exp(tokens, params))
   return lhs
   
-def or_exp(tokens):
+def or_exp(tokens, params):
   def or_(a, b):
     def _or(row):
       return a(row) or b(row)
     return _or
     
-  lhs = comparison_exp(tokens)
+  lhs = comparison_exp(tokens, params)
   while len(tokens) and tokens[0] == 'or':
     tokens.pop(0)
-    lhs = or_(lhs, comparisson_exp(tokens))
+    lhs = or_(lhs, comparisson_exp(tokens, params))
   return lhs
   
-def comparison_exp(tokens):
-  lhs = additive_exp(tokens)
+def comparison_exp(tokens, params):
+  lhs = additive_exp(tokens, params)
 
   if len(tokens) and tokens[0] in COMPARISON_OPS:
     op = COMPARISON_OPS[tokens.pop(0)]
-    rhs =  additive_exp(tokens)
+    rhs =  additive_exp(tokens, params)
     def comparison(row):
       return op(lhs(row), rhs(row))
     return comparison
   else:
     return lhs
 
-def additive_exp(tokens):
-  lhs = multiplicative_exp(tokens)
+def additive_exp(tokens, params):
+  lhs = multiplicative_exp(tokens, params)
   while tokens:
     op = ADDITIVE_OPS.get(tokens[0])
     if op:
       tokens.pop(0)
-      rhs =  multiplicative_exp(tokens)
+      rhs =  multiplicative_exp(tokens, params)
       def additive(row, lhs=lhs): # bind lhs for each return
         return op(lhs(row), rhs(row))
       lhs = additive
@@ -318,13 +343,13 @@ def additive_exp(tokens):
       break
   return lhs
 
-def multiplicative_exp(tokens):
-  lhs = unary_exp(tokens)
+def multiplicative_exp(tokens, params):
+  lhs = unary_exp(tokens, params)
   while len(tokens):
     op = MULTIPLICATIVE_OPS.get(tokens[0])
     if op:
       tokens.pop(0)
-      rhs = unary_exp(tokens)
+      rhs = unary_exp(tokens, params)
       def multiplicative(row, lhs=lhs):
         return op(lhs(row), rhs(row))
       lhs = multiplicative
@@ -332,23 +357,23 @@ def multiplicative_exp(tokens):
       break
   return lhs
 
-def unary_exp(tokens):
+def unary_exp(tokens, params):
   assert len(tokens)
   
   if tokens[0] == '-':
     tokens.pop(0)
-    value = value_exp(tokens)
+    value = value_exp(tokens, params)
     return lambda row: operator.neg(value(row))
   elif tokens[0] == 'not':
     tokens.pop(0)
-    value = value_exp(tokens)
+    value = value_exp(tokens, params)
     return lambda row: operator.not_(value(row))
   elif tokens[0] == '+':
     tokens.pop(0)
     
-  return value_exp(tokens)
+  return value_exp(tokens, params)
 
-def value_exp(tokens):
+def value_exp(tokens, params):
   """
   Returns a function that will return a value for the given token
   """
@@ -356,31 +381,35 @@ def value_exp(tokens):
   
   if token.startswith('$'):
     return operator.itemgetter(int(token[1:]))
+  if token.startswith('?'):
+    pos = int(token[1:])
+    return lambda x: params[pos]
+
   elif token[0] in string.digits:
     return lambda x: int(token)
   elif token.startswith('"'):
     return lambda x: token[1:-1]
   elif token == '(':
-    return group_exp(tokens)
+    return group_exp(tokens, params)
   else:
     if tokens and tokens[0] == '(':
-      return function_exp(token, tokens)
+      return function_exp(token, tokens, params)
     else:
       return operator.attrgetter(token)
 
   
-def function_exp(name, tokens):
+def function_exp(name, tokens, params):
   token = tokens.pop(0)
   assert token == '('
 
   args = []
   
   if tokens[0] != ')':
-    args.append(and_exp(tokens))
+    args.append(and_exp(tokens, params))
     
     while tokens[0] == ',':
       tokens.pop(0)
-      args.append(and_exp(tokens))
+      args.append(and_exp(tokens, params))
     
   assert tokens[0] == ')'
   tokens.pop(0)
@@ -448,6 +477,10 @@ class Tokens(object):
       char = self.current_char
       self.read_char()
       return char
+    elif self.current_char == "?":
+      self.read_char()
+      return "?"+self.read_word()
+
     elif self.current_char == '<':
       self.read_char()
       if self.current_char == '=':
