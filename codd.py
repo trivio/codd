@@ -129,7 +129,13 @@ def select(*columns):
   
 
   def _select(seq):
-    Record = namedtuple(seq.schema.__name__, fields)
+    schema = getattr(seq,'schema',None)
+    if schema:
+      name = schema.__name__
+    else:
+      name = "row"
+
+    Record = namedtuple(name, fields)
     
     return success([
       Record(*[col(item) for col in cols])
@@ -290,10 +296,11 @@ MULTIPLICATIVE_OPS ={
   '/'  : operator.div
 }
 
-def parse(statement, params):
+def parse(statement, params=[]):
   return and_exp(list(Tokens(statement)), params)
 
 def and_exp(tokens, params):
+
   def and_(a, b):
     def _and(row):
       return a(row) and b(row)
@@ -380,7 +387,14 @@ def value_exp(tokens, params):
   token = tokens.pop(0)
   
   if token.startswith('$'):
-    return operator.itemgetter(int(token[1:]))
+    key = token[1:]
+    try:
+      key = int(key)
+    except ValueError:
+      pass
+    return operator.itemgetter(key)
+
+
   if token.startswith('?'):
     pos = int(token[1:])
     return lambda x: params[pos]
@@ -392,10 +406,11 @@ def value_exp(tokens, params):
   elif token == '(':
     return group_exp(tokens, params)
   else:
+
     if tokens and tokens[0] == '(':
       return function_exp(token, tokens, params)
     else:
-      return operator.attrgetter(token)
+      return operator.itemgetter(token)
 
   
 def function_exp(name, tokens, params):
@@ -414,7 +429,12 @@ def function_exp(name, tokens, params):
   assert tokens[0] == ')'
   tokens.pop(0)
 
-  return lambda x: datetime.now()
+  udf = params[name]
+  def invoke_udf(record):
+    t = [a(record) for a in args]
+    return udf(*t)
+
+  return invoke_udf#lambda x: datetime.now()
 
 
 class Tokens(object):
@@ -450,10 +470,10 @@ class Tokens(object):
     return self.current_char == ''
     
   def is_letter(self):
-    return self.current_char in string.letters
+    return self.current_char in string.letters + '_'
     
   def is_number(self):
-    return self.current_char in string.digits + '_'
+    return self.current_char in string.digits 
   
   def is_letter_or_digit(self):
     return self.is_letter() or self.is_number()
@@ -477,9 +497,10 @@ class Tokens(object):
       char = self.current_char
       self.read_char()
       return char
-    elif self.current_char == "?":
+    elif self.current_char in "?$":
+      char = self.current_char
       self.read_char()
-      return "?"+self.read_word()
+      return char+self.read_word()
 
     elif self.current_char == '<':
       self.read_char()
