@@ -13,7 +13,7 @@ except IOError:
 setup(
   name='codd',
   py_modules = ['codd'],
-  version='0.1.5',
+  version='0.1.6',
   description='relational alegrbra for functional programs',
   long_description=README,
   author='Scott Robertson',
@@ -24,8 +24,10 @@ setup(
       "License :: OSI Approved :: MIT License",
       "Operating System :: OS Independent",
       "Development Status :: 3 - Alpha",
-      "Environment :: Web Environment",
       "Intended Audience :: Developers",
       "Topic :: Software Development",
+  ],
+  install_requires=[
+    'xlocal'
   ]
 )

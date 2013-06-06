@@ -12,6 +12,9 @@ from datetime import datetime
 import string
 from StringIO import StringIO
 
+from xlocal import xlocal
+
+
 
 
 # tables
@@ -231,14 +234,14 @@ def when(**context):
   _when.invoke = invoke
   return _when
 
-def where(clause, *params):
-  boolean_op = parse(clause, params)
+def where(clause, **options):
+  boolean_op = parse(clause, **options)
   
-  def _where(seq):
+  def _where(seq, ctx):
     return success([
       item
       for item in seq
-      if boolean_op(item)
+      if boolean_op(item, ctx)
     ])
     
   return _where
@@ -295,92 +298,99 @@ MULTIPLICATIVE_OPS ={
   '*'  : operator.mul,
   '/'  : operator.div
 }
+SYMBOLS = '+-*/(),='
 
-def parse(statement, params=[]):
-  return and_exp(list(Tokens(statement)), params)
+parse_options = xlocal()
 
-def and_exp(tokens, params):
+def get_attr(name):
+  return lambda row, ctx: getattr(row,name,None)
+
+def parse(statement, get_value=get_attr):
+  with parse_options(get_value=get_value):
+    return and_exp(list(Tokens(statement)))
+
+def and_exp(tokens):
 
   def and_(a, b):
-    def _and(row):
-      return a(row) and b(row)
+    def _and(row, ctx):
+      return a(row,ctx) and b(row,ctx)
     return _and
     
-  lhs = or_exp(tokens, params) 
+  lhs = or_exp(tokens) 
   while len(tokens) and tokens[0] == 'and':
     tokens.pop(0)
-    lhs = and_(lhs, or_exp(tokens, params))
+    lhs = and_(lhs, or_exp(tokens))
   return lhs
   
-def or_exp(tokens, params):
+def or_exp(tokens):
   def or_(a, b):
-    def _or(row):
-      return a(row) or b(row)
+    def _or(row,ctx):
+      return a(row,ctx) or b(row,ctx)
     return _or
     
-  lhs = comparison_exp(tokens, params)
+  lhs = comparison_exp(tokens)
   while len(tokens) and tokens[0] == 'or':
     tokens.pop(0)
-    lhs = or_(lhs, comparisson_exp(tokens, params))
+    lhs = or_(lhs, comparisson_exp(tokens))
   return lhs
   
-def comparison_exp(tokens, params):
-  lhs = additive_exp(tokens, params)
+def comparison_exp(tokens):
+  lhs = additive_exp(tokens)
 
   if len(tokens) and tokens[0] in COMPARISON_OPS:
     op = COMPARISON_OPS[tokens.pop(0)]
-    rhs =  additive_exp(tokens, params)
-    def comparison(row):
-      return op(lhs(row), rhs(row))
+    rhs =  additive_exp(tokens)
+    def comparison(row,ctx):
+      return op(lhs(row,ctx), rhs(row,ctx))
     return comparison
   else:
     return lhs
 
-def additive_exp(tokens, params):
-  lhs = multiplicative_exp(tokens, params)
+def additive_exp(tokens):
+  lhs = multiplicative_exp(tokens)
   while tokens:
     op = ADDITIVE_OPS.get(tokens[0])
     if op:
       tokens.pop(0)
-      rhs =  multiplicative_exp(tokens, params)
-      def additive(row, lhs=lhs): # bind lhs for each return
-        return op(lhs(row), rhs(row))
+      rhs =  multiplicative_exp(tokens)
+      def additive(row, ctx, lhs=lhs): # bind lhs for each return
+        return op(lhs(row,ctx), rhs(row,ctx))
       lhs = additive
     else:
       break
   return lhs
 
-def multiplicative_exp(tokens, params):
-  lhs = unary_exp(tokens, params)
+def multiplicative_exp(tokens):
+  lhs = unary_exp(tokens)
   while len(tokens):
     op = MULTIPLICATIVE_OPS.get(tokens[0])
     if op:
       tokens.pop(0)
-      rhs = unary_exp(tokens, params)
-      def multiplicative(row, lhs=lhs):
-        return op(lhs(row), rhs(row))
+      rhs = unary_exp(tokens)
+      def multiplicative(row, ctx, lhs=lhs):
+        return op(lhs(row,ctx), rhs(row,ctx))
       lhs = multiplicative
     else:
       break
   return lhs
 
-def unary_exp(tokens, params):
+def unary_exp(tokens):
   assert len(tokens)
   
   if tokens[0] == '-':
     tokens.pop(0)
-    value = value_exp(tokens, params)
-    return lambda row: operator.neg(value(row))
+    value = value_exp(tokens)
+    return lambda row, ctx: operator.neg(value(row, ctx))
   elif tokens[0] == 'not':
     tokens.pop(0)
-    value = value_exp(tokens, params)
-    return lambda row: operator.not_(value(row))
+    value = value_exp(tokens)
+    return lambda row, ctx: operator.not_(value(row, ctx))
   elif tokens[0] == '+':
     tokens.pop(0)
     
-  return value_exp(tokens, params)
+  return value_exp(tokens)
 
-def value_exp(tokens, params):
+def value_exp(tokens):
   """
   Returns a function that will return a value for the given token
   """
@@ -397,44 +407,51 @@ def value_exp(tokens, params):
 
   if token.startswith('?'):
     pos = int(token[1:])
-    return lambda x: params[pos]
+    return lambda row, ctx: ctx.get('params',[0])[pos]
 
   elif token[0] in string.digits:
-    return lambda x: int(token)
+    return lambda row, ctx: int(token)
   elif token.startswith('"'):
-    return lambda x: token[1:-1]
+    return lambda row, ctx: token[1:-1]
+  elif token in SYMBOLS: 
+    return lambda row, ctx: token
   elif token == '(':
-    return group_exp(tokens, params)
+    return group_exp(tokens)
   else:
 
     if tokens and tokens[0] == '(':
-      return function_exp(token, tokens, params)
+      return function_exp(token, tokens)
     else:
-      return operator.itemgetter(token)
 
+      attr = parse_options.get_value(token)
+
+      #attr = lambda row, ctx: get_value#get_value(row)# getattr(row, token)#row.get(token)
+      attr.__name__ = str(token)
+      return attr 
   
-def function_exp(name, tokens, params):
+def function_exp(name, tokens):
   token = tokens.pop(0)
   assert token == '('
 
   args = []
   
   if tokens[0] != ')':
-    args.append(and_exp(tokens, params))
+    args.append(and_exp(tokens))
     
     while tokens[0] == ',':
       tokens.pop(0)
-      args.append(and_exp(tokens, params))
+      args.append(and_exp(tokens))
     
   assert tokens[0] == ')'
   tokens.pop(0)
 
-  udf = params[name]
-  def invoke_udf(record):
-    t = [a(record) for a in args]
-    return udf(*t)
+  def invoke_udf(record, ctx):
+    udf = ctx['udf'][name]
 
-  return invoke_udf#lambda x: datetime.now()
+    t = [a(record, ctx) for a in args]
+    return udf(*t)
+  invoke_udf.__name__ = str(name)
+  return invoke_udf
 
 
 class Tokens(object):
@@ -493,7 +510,7 @@ class Tokens(object):
     return ''.join(buff)
     
   def read_symbol(self):
-    if self.current_char in '+-*/(),=':
+    if self.current_char in SYMBOLS:
       char = self.current_char
       self.read_char()
       return char
