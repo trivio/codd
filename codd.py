@@ -307,7 +307,9 @@ def get_attr(name):
 
 def parse(statement, get_value=get_attr):
   with parse_options(get_value=get_value):
-    return and_exp(list(Tokens(statement)))
+    tokens = list(Tokens(statement))
+    exp = and_exp(tokens)
+    return exp
 
 def and_exp(tokens):
 
@@ -413,10 +415,10 @@ def value_exp(tokens):
     return lambda row, ctx: int(token)
   elif token.startswith('"'):
     return lambda row, ctx: token[1:-1]
-  elif token in SYMBOLS: 
-    return lambda row, ctx: token
   elif token == '(':
     return group_exp(tokens)
+  elif token in SYMBOLS: 
+    return lambda row, ctx: token
   else:
 
     if tokens and tokens[0] == '(':
@@ -428,27 +430,32 @@ def value_exp(tokens):
       #attr = lambda row, ctx: get_value#get_value(row)# getattr(row, token)#row.get(token)
       attr.__name__ = str(token)
       return attr 
-  
+
+def group_exp(tokens):
+  args = []
+  if tokens[0] != ')':
+    args.append(and_exp(tokens))
+    while tokens[0] == ',':
+      tokens.pop(0)
+      args.append(and_exp(tokens))
+  assert tokens[0] == ')'
+  tokens.pop(0)
+
+  def _(record,ctx):
+    return [a(record, ctx) for a in args]
+  _.__name__ = ",".join([a.__name__ for a in args])
+  return _
+ 
+
 def function_exp(name, tokens):
   token = tokens.pop(0)
   assert token == '('
 
-  args = []
-  
-  if tokens[0] != ')':
-    args.append(and_exp(tokens))
-    
-    while tokens[0] == ',':
-      tokens.pop(0)
-      args.append(and_exp(tokens))
-    
-  assert tokens[0] == ')'
-  tokens.pop(0)
+  get_list = group_exp(tokens)
 
   def invoke_udf(record, ctx):
     udf = ctx['udf'][name]
-
-    t = [a(record, ctx) for a in args]
+    t = get_list(record, ctx)#[a(record, ctx) for a in args]
     return udf(*t)
   invoke_udf.__name__ = str(name)
   return invoke_udf
