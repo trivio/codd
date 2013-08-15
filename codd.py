@@ -298,18 +298,13 @@ MULTIPLICATIVE_OPS ={
   '*'  : operator.mul,
   '/'  : operator.div
 }
-SYMBOLS = '+-*/(),='
+SYMBOLS = '+-*/(),=.'
 
 parse_options = xlocal()
 
 def get_attr(name):
   return lambda row, ctx: getattr(row,name,None)
 
-def parse(statement, get_value=get_attr):
-  with parse_options(get_value=get_value):
-    tokens = list(Tokens(statement))
-    exp = and_exp(tokens)
-    return exp
 
 def and_exp(tokens):
 
@@ -460,6 +455,12 @@ def function_exp(name, tokens):
   invoke_udf.__name__ = str(name)
   return invoke_udf
 
+def parse(statement, root_exp = and_exp, get_value=get_attr):
+  with parse_options(get_value=get_value):
+    tokens = list(Tokens(statement))
+    exp = root_exp(tokens)
+    return exp
+
 
 class Tokens(object):
   def __init__(self, statement):
@@ -484,7 +485,9 @@ class Tokens(object):
       return self.read_symbol()
       
   def read_char(self):
+    c = self.current_char
     self.current_char = self.stream.read(1)
+    return c
     
   def skip_whitespace(self):
     while ('\0' < self.current_char   <= ' '):
@@ -552,7 +555,7 @@ class Tokens(object):
     
   def read_until(self, seek):
     buff  = []
-    while not self.at_end() and self.current_char != seek:
+    while not self.at_end() and self.current_char not in seek:
       buff.append(self.current_char)
       self.read_char()
     return "".join(buff)
@@ -562,5 +565,5 @@ class Tokens(object):
     self.read_char()
     constant = self.read_until(quote_char)
     self.read_char()
-    return '"' + constant + '"'
+    return quote_char + constant + quote_char
 
