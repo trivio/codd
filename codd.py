@@ -1,6 +1,6 @@
 """
 codd: named in honor of  the late great Edgar Codd
-provides relational alegrbra for functional programs
+provides relational algebra for functional programs
 
 """
 
@@ -20,7 +20,7 @@ from xlocal import xlocal
 # tables
 class table(object):
   """
-  A sequnce of homegnous objects.
+  A sequence of homogeneous objects.
   """
   def __init__(self, name, fields, sequence=()):
     self.schema = namedtuple(name, fields)
@@ -179,8 +179,8 @@ def join(right, **conditions):
 
 def when(**context):
   """
-  Returns a decorator used to create a chain of pattern matched/gaurded
-  functions. Useful for overiding functions based on input types.
+  Return a decorator used to create a chain of pattern matched/gaurded
+  functions. Useful for overriding functions based on input types.
   
   Example:
   >>> my_func = when()
@@ -417,7 +417,7 @@ def unary_exp(tokens):
 
 def value_exp(tokens):
   """
-  Returns a function that will return a value for the given token
+  Return a function that will return a value for the given token
   """
   token = tokens.pop(0)
   
