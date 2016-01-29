@@ -10,7 +10,8 @@ import itertools
 import operator
 from datetime import datetime
 import string
-from StringIO import StringIO
+import numbers
+from io import StringIO
 
 from xlocal import xlocal
 
@@ -98,7 +99,7 @@ def pipe(val, *fns):
   for i,f in enumerate(fns):
     try:
       m_val = bind(m_val, f)
-    except Exception, e:
+    except Exception as e:
       raise
       # this should never happen
       m_val = failure("{} errored at step {}:  {}".format(f.__name__, i, e))
@@ -252,7 +253,7 @@ def unit(func):
   def _(value):
     try:
       return success(func(value))
-    except Exception, e:
+    except Exception as e:
       return failure(e)
   return _
     
@@ -322,9 +323,23 @@ ADDITIVE_OPS = {
   '-'  : operator.sub,
 }
 
+
+# An alias for future.utils.old_div():
+def old_div(a, b):
+    """
+    Equivalent to ``a / b`` on Python 2 without ``from __future__ import
+    division``.
+    TODO: generalize this to other objects (like arrays etc.)
+    """
+    if isinstance(a, numbers.Integral) and isinstance(b, numbers.Integral):
+        return a // b
+    else:
+        return a / b
+
+
 MULTIPLICATIVE_OPS ={
   '*'  : operator.mul,
-  '/'  : operator.div
+  '/'  : old_div,
 }
 SYMBOLS = '+-*/(),=.'
 
