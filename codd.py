@@ -11,7 +11,7 @@ import operator
 from datetime import datetime
 import string
 import numbers
-from io import StringIO
+import io
 
 from xlocal import xlocal
 
@@ -324,7 +324,6 @@ ADDITIVE_OPS = {
 }
 
 
-# An alias for future.utils.old_div():
 def old_div(a, b):
     """
     Equivalent to ``a / b`` on Python 2 without ``from __future__ import
@@ -507,14 +506,19 @@ def parse(statement, root_exp = and_exp, get_value=get_attr):
 
 class Tokens(object):
   def __init__(self, statement):
-    self.stream = StringIO(statement)
+    if isinstance(statement, bytes):
+        statement = statement.decode('utf8')
+    self.stream = io.StringIO(statement)
     self.current_char = None
     self.read_char()
     
   def __iter__(self):
     return self
-        
+
   def next(self):
+    return type(self).__next__(self)
+
+  def __next__(self):
     self.skip_whitespace()
     if self.at_end():
       raise StopIteration()
@@ -540,7 +544,7 @@ class Tokens(object):
     return self.current_char == ''
     
   def is_letter(self):
-    return self.current_char in string.letters + '_'
+    return self.current_char in string.ascii_letters + '_'
     
   def is_number(self):
     return self.current_char in string.digits 
