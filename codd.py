@@ -10,7 +10,8 @@ import itertools
 import operator
 from datetime import datetime
 import string
-from StringIO import StringIO
+import numbers
+import io
 
 from xlocal import xlocal
 
@@ -98,7 +99,7 @@ def pipe(val, *fns):
   for i,f in enumerate(fns):
     try:
       m_val = bind(m_val, f)
-    except Exception, e:
+    except Exception as e:
       raise
       # this should never happen
       m_val = failure("{} errored at step {}:  {}".format(f.__name__, i, e))
@@ -252,7 +253,7 @@ def unit(func):
   def _(value):
     try:
       return success(func(value))
-    except Exception, e:
+    except Exception as e:
       return failure(e)
   return _
     
@@ -322,9 +323,22 @@ ADDITIVE_OPS = {
   '-'  : operator.sub,
 }
 
+
+def old_div(a, b):
+    """
+    Equivalent to ``a / b`` on Python 2 without ``from __future__ import
+    division``.
+    TODO: generalize this to other objects (like arrays etc.)
+    """
+    if isinstance(a, numbers.Integral) and isinstance(b, numbers.Integral):
+        return a // b
+    else:
+        return a / b
+
+
 MULTIPLICATIVE_OPS ={
   '*'  : operator.mul,
-  '/'  : operator.div
+  '/'  : old_div,
 }
 SYMBOLS = '+-*/(),=.'
 
@@ -492,14 +506,19 @@ def parse(statement, root_exp = and_exp, get_value=get_attr):
 
 class Tokens(object):
   def __init__(self, statement):
-    self.stream = StringIO(statement)
+    if isinstance(statement, bytes):
+        statement = statement.decode('utf8')
+    self.stream = io.StringIO(statement)
     self.current_char = None
     self.read_char()
     
   def __iter__(self):
     return self
-        
+
   def next(self):
+    return type(self).__next__(self)
+
+  def __next__(self):
     self.skip_whitespace()
     if self.at_end():
       raise StopIteration()
@@ -525,7 +544,7 @@ class Tokens(object):
     return self.current_char == ''
     
   def is_letter(self):
-    return self.current_char in string.letters + '_'
+    return self.current_char in string.ascii_letters + '_'
     
   def is_number(self):
     return self.current_char in string.digits 
