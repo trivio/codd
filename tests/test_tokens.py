@@ -9,6 +9,7 @@ def test_tokens():
         '123908471234987' # number
         '"double quotes\'<>?&"' # string constant
         "'single quotes \"<>?&'" # string constant
+        "`back ticks`"
         '+-*/(),=.' # basic symbols
         '?word' # variable
         '$word' # variable - American style
@@ -27,10 +28,12 @@ def test_tokens():
         '123908471234987',
         '"double quotes\'<>?&"',
         '\'single quotes "<>?&\'',
+        '`back ticks`',
         '+', '-', '*', '/', '(', ')', ',', '=', '.',
         '?word', '$word',
         '<', '<=',
         '>', '>=',
         '!', '!=',
+
     ]
     eq_(tokens, expected)

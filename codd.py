@@ -526,7 +526,7 @@ class Tokens(object):
       return self.read_word()
     elif self.is_number():
       return self.read_number()
-    elif self.current_char in ("'", '"'):
+    elif self.current_char in ("'", '"', '`'):
       return self.read_string_constant(self.current_char)
     else:
       return self.read_symbol()
